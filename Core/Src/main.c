@@ -295,7 +295,14 @@ void Temperature_measurement(void *argument)
     for(int i = 0; i < DS18B20_Quantity(); i++)
     {
       if(DS18B20_GetTemperature(i, &temperature))
-        printf("Temperature is : %.2f", temperature);
+      {
+        xSemaphoreTake(ModbusH.ModBusSphrHandle , 100);
+        ModbusDATA[1] = (int)temperature;
+        xSemaphoreGive(ModbusH.ModBusSphrHandle);
+        printf("Temperature is : %.2f\n", temperature);
+      }
+        
+      else printf("Error!\n");
     }
     osDelay(1000/portTICK_PERIOD_MS);
   
@@ -304,17 +311,9 @@ void Temperature_measurement(void *argument)
 
 void StartDefaultTask(void *argument)
 {
-  int i=0;
-  // HAL_UART_Receive_IT(&huart1, buffer, 6);
   for(;;)
   {
-    ModbusDATA[0]=i++;
-    ModbusDATA[1]=i++;
-    ModbusDATA[2]=i++;
-    ModbusDATA[5]=6;
-    printf("Hello World!!!\n");
     vTaskDelay(1000/portTICK_PERIOD_MS);
-    if(i>10) i=0;
   }
 }
 
@@ -346,6 +345,8 @@ int main(void)
   MX_GPIO_Init();
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
+  MX_TIM1_Init();
+  HAL_TIM_Base_Start(&htim1);
 
   ModbusH.uModbusType = MB_SLAVE;
   ModbusH.port =  &huart3;
@@ -372,13 +373,13 @@ int main(void)
 
 
   /* Start scheduler */
-  // osKernelStart();
+  osKernelStart();
 
-  while(1)
-  {
-    HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-    OneWire_Delay(100);
-  }
+  // while(1)
+  // {
+  //   HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+  //   OneWire_Delay(5);
+  // }
 
 }
 
