@@ -8,7 +8,7 @@
  *      mateusz@msalamon.pl
  *
  */
-#include "tim.h"
+#include "main.h"
 #include "onewire.h"
 #include "ds18b20.h"
 

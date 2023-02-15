@@ -11,7 +11,7 @@
 #ifndef ONEWIRE_H
 #define ONEWIRE_H 
 
-#include "gpio.h"
+#include "main.h"
 
 //
 //	1-Wire bus structure
@@ -79,6 +79,9 @@ void OneWire_SelectWithPointer(OneWire_t* OneWireStruct, uint8_t* ROM);
 //	CRC calculating
 //
 uint8_t OneWire_CRC8(uint8_t* addr, uint8_t len);
+
+//Delay
+void OneWire_Delay(uint16_t us);
 
 #endif
 

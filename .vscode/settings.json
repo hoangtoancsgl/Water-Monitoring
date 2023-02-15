@@ -2,6 +2,10 @@
     "files.associations": {
         "freertos.h": "c",
         "task.h": "c",
-        "modbus.h": "c"
+        "modbus.h": "c",
+        "main.h": "c",
+        "stm32f1xx_hal.h": "c",
+        "onewire.h": "c",
+        "ds18b20.h": "c"
     }
 }

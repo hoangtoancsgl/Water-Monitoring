@@ -9,6 +9,7 @@
  *
  */
 #include "ds18b20.h"
+#include "main.h"
 
 //
 //	VARIABLES

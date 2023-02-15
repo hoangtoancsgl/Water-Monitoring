@@ -1,21 +1,5 @@
-/* USER CODE BEGIN Header */
-/**
-  ******************************************************************************
-  * @file           : main.c
-  * @brief          : Main program body
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2023 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
-/* USER CODE END Header */
+
+
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
 #include "cmsis_os.h"
@@ -25,25 +9,15 @@
 /* USER CODE BEGIN Includes */
 #include "Modbus.h"
 #include "semphr.h"
+#include "ds18b20.h"
+
 /* USER CODE END Includes */
-
-/* Private typedef -----------------------------------------------------------*/
-/* USER CODE BEGIN PTD */
-
-/* USER CODE END PTD */
-
-/* Private define ------------------------------------------------------------*/
-/* USER CODE BEGIN PD */
-/* USER CODE END PD */
-
-/* Private macro -------------------------------------------------------------*/
-/* USER CODE BEGIN PM */
-
-/* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart3;
+
+TIM_HandleTypeDef htim1;
 
 /* Definitions for defaultTask */
 osThreadId_t defaultTaskHandle;
@@ -52,31 +26,24 @@ const osThreadAttr_t defaultTask_attributes = {
   .priority = (osPriority_t) osPriorityNormal,
   .stack_size = 128 * 4
 };
-/* Definitions for myTaskSlave */
-osThreadId_t myTaskSlaveHandle;
-const osThreadAttr_t myTaskSlave_attributes = {
-  .name = "myTaskSlave",
+
+/* Definitions for Temperature_measurement_task */
+osThreadId_t Temperature_measurement_Handle;
+const osThreadAttr_t Temperature_measurement_attributes = {
+  .name = "Temperature_measurement",
   .priority = (osPriority_t) osPriorityLow,
   .stack_size = 128 * 4
 };
+
 /* USER CODE BEGIN PV */
 modbusHandler_t ModbusH;
 uint16_t ModbusDATA[8];
 /* USER CODE END PV */
 
-/* Private function prototypes -----------------------------------------------*/
-void SystemClock_Config(void);
-static void MX_GPIO_Init(void);
-static void MX_USART1_UART_Init(void);
-static void MX_USART3_UART_Init(void);
-void StartDefaultTask(void *argument);
-void StartTaskSlave(void *argument);
-/* USER CODE BEGIN PFP */
-
-/* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+
 //For debug
 #ifdef __GNUC__
 #define PUTCHAR_PROTOTYPE int __io_putchar(int ch)
@@ -89,106 +56,24 @@ PUTCHAR_PROTOTYPE
   HAL_UART_Transmit(&huart1, (uint8_t *)&ch, 1, HAL_MAX_DELAY);
   return ch;
 }
-/* USER CODE END 0 */
 
+/*....................................Init function..................................*/
 /**
-  * @brief  The application entry point.
-  * @retval int
-  */
-int main(void)
-{
-  /* USER CODE BEGIN 1 */
-
-  /* USER CODE END 1 */
-
-  /* MCU Configuration--------------------------------------------------------*/
-
-  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
-  HAL_Init();
-
-  /* USER CODE BEGIN Init */
-
-  /* USER CODE END Init */
-
-  /* Configure the system clock */
-  SystemClock_Config();
-
-  /* USER CODE BEGIN SysInit */
-
-  /* USER CODE END SysInit */
-
-  /* Initialize all configured peripherals */
-  MX_GPIO_Init();
-  MX_USART1_UART_Init();
-  MX_USART3_UART_Init();
-  /* USER CODE BEGIN 2 */
-  ModbusH.uModbusType = MB_SLAVE;
-  ModbusH.port =  &huart3;
-  ModbusH.u8id = 3; //Modbus slave ID
-  ModbusH.u16timeOut = 1000;
-  ModbusH.EN_Port = RS485_GPIO_Port;
-  ModbusH.EN_Pin = RS485_Pin;
-  ModbusH.u16regs = ModbusDATA;
-  ModbusH.u16regsize= sizeof(ModbusDATA)/sizeof(ModbusDATA[0]);
-  ModbusH.xTypeHW = USART_HW;
-  //Initialize Modbus library
-  ModbusInit(&ModbusH);
-  //Start capturing traffic on serial Port
-  ModbusStart(&ModbusH);
-  /* USER CODE END 2 */
-
-  /* Init scheduler */
-  osKernelInitialize();
-
-  /* USER CODE BEGIN RTOS_MUTEX */
-  /* add mutexes, ... */
-  /* USER CODE END RTOS_MUTEX */
-
-  /* USER CODE BEGIN RTOS_SEMAPHORES */
-  /* add semaphores, ... */
-  /* USER CODE END RTOS_SEMAPHORES */
-
-  /* USER CODE BEGIN RTOS_TIMERS */
-  /* start timers, add new ones, ... */
-  /* USER CODE END RTOS_TIMERS */
-
-  /* USER CODE BEGIN RTOS_QUEUES */
-  /* add queues, ... */
-  /* USER CODE END RTOS_QUEUES */
-
-  /* Create the thread(s) */
-  /* creation of defaultTask */
-  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
- 
- /* creation of myTaskSlave */
-  myTaskSlaveHandle = osThreadNew(StartTaskSlave, NULL, &myTaskSlave_attributes);
-  /* USER CODE BEGIN RTOS_THREADS */
-  /* add threads, ... */
-  /* USER CODE END RTOS_THREADS */
-
-  /* USER CODE BEGIN RTOS_EVENTS */
-  /* add events, ... */
-  /* USER CODE END RTOS_EVENTS */
-
-  /* Start scheduler */
-  osKernelStart();
-
-  /* We should never get here as control is now taken by the scheduler */
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
-  while (1)
-  {
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-  }
-  /* USER CODE END 3 */
-}
-
-/**
-  * @brief System Clock Configuration
+  * @brief  This function is executed in case of error occurrence.
   * @retval None
   */
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
+  /* User can add his own implementation to report the HAL error return state */
+  __disable_irq();
+  while (1)
+  {
+  }
+  /* USER CODE END Error_Handler_Debug */
+}
+
+
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -223,11 +108,7 @@ void SystemClock_Config(void)
   }
 }
 
-/**
-  * @brief USART1 Initialization Function
-  * @param None
-  * @retval None
-  */
+
 static void MX_USART1_UART_Init(void)
 {
 
@@ -256,11 +137,6 @@ static void MX_USART1_UART_Init(void)
 
 }
 
-/**
-  * @brief USART3 Initialization Function
-  * @param None
-  * @retval None
-  */
 static void MX_USART3_UART_Init(void)
 {
 
@@ -289,11 +165,6 @@ static void MX_USART3_UART_Init(void)
 
 }
 
-/**
-  * @brief GPIO Initialization Function
-  * @param None
-  * @retval None
-  */
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -325,47 +196,6 @@ static void MX_GPIO_Init(void)
 
 }
 
-/* USER CODE BEGIN 4 */
-void StartTaskSlave(void *argument)
-{
-  /* USER CODE BEGIN StartTaskSlave */
-  /* Infinite loop */
-  for(;;)
-  {
-	  // xSemaphoreTake(ModbusH.ModBusSphrHandle , 100);
-	  // HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, ModbusH.u16regs[0] & 0x1);
-	  // xSemaphoreGive(ModbusH.ModBusSphrHandle);
-	  osDelay(200);
-  }
-  /* USER CODE END StartTaskSlave */
-}
-/* USER CODE END 4 */
-
-/* USER CODE BEGIN Header_StartDefaultTask */
-/**
-  * @brief  Function implementing the defaultTask thread.
-  * @param  argument: Not used
-  * @retval None
-  */
-/* USER CODE END Header_StartDefaultTask */
-void StartDefaultTask(void *argument)
-{
-  /* USER CODE BEGIN 5 */
-  int i=0;
-  // HAL_UART_Receive_IT(&huart1, buffer, 6);
-  /* Infinite loop */
-  for(;;)
-  {
-    ModbusDATA[0]=i++;
-    ModbusDATA[1]=i++;
-    ModbusDATA[2]=i++;
-    ModbusDATA[5]=6;
-    printf("Hello World!!!\n");
-    vTaskDelay(1000/portTICK_PERIOD_MS);
-    if(i>10) i=0;
-  }
-  /* USER CODE END 5 */
-}
 
 /**
   * @brief  Period elapsed callback in non blocking mode
@@ -388,35 +218,168 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
   /* USER CODE END Callback 1 */
 }
 
-/**
-  * @brief  This function is executed in case of error occurrence.
-  * @retval None
-  */
-void Error_Handler(void)
+void MX_TIM1_Init(void)
 {
-  /* USER CODE BEGIN Error_Handler_Debug */
-  /* User can add his own implementation to report the HAL error return state */
-  __disable_irq();
-  while (1)
+  TIM_ClockConfigTypeDef sClockSourceConfig;
+  TIM_MasterConfigTypeDef sMasterConfig;
+
+  htim1.Instance = TIM1;
+  htim1.Init.Prescaler = 72;
+  htim1.Init.CounterMode = TIM_COUNTERMODE_UP;
+  htim1.Init.Period = 65535;
+  htim1.Init.ClockDivision = TIM_CLOCKDIVISION_DIV1;
+  htim1.Init.RepetitionCounter = 0;
+  if (HAL_TIM_Base_Init(&htim1) != HAL_OK)
   {
+    Error_Handler();
   }
-  /* USER CODE END Error_Handler_Debug */
+
+  sClockSourceConfig.ClockSource = TIM_CLOCKSOURCE_INTERNAL;
+  if (HAL_TIM_ConfigClockSource(&htim1, &sClockSourceConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  sMasterConfig.MasterOutputTrigger = TIM_TRGO_RESET;
+  sMasterConfig.MasterSlaveMode = TIM_MASTERSLAVEMODE_DISABLE;
+  if (HAL_TIMEx_MasterConfigSynchronization(&htim1, &sMasterConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
 }
 
-#ifdef  USE_FULL_ASSERT
-/**
-  * @brief  Reports the name of the source file and the source line number
-  *         where the assert_param error has occurred.
-  * @param  file: pointer to the source file name
-  * @param  line: assert_param error line source number
-  * @retval None
-  */
-void assert_failed(uint8_t *file, uint32_t line)
+void HAL_TIM_Base_MspInit(TIM_HandleTypeDef* tim_baseHandle)
 {
-  /* USER CODE BEGIN 6 */
-  /* User can add his own implementation to report the file name and line number,
-     ex: printf("Wrong parameters value: file %s on line %d\r\n", file, line) */
-  /* USER CODE END 6 */
+
+  if(tim_baseHandle->Instance==TIM1)
+  {
+  /* USER CODE BEGIN TIM1_MspInit 0 */
+
+  /* USER CODE END TIM1_MspInit 0 */
+    /* TIM1 clock enable */
+    __HAL_RCC_TIM1_CLK_ENABLE();
+  /* USER CODE BEGIN TIM1_MspInit 1 */
+
+  /* USER CODE END TIM1_MspInit 1 */
+  }
 }
-#endif /* USE_FULL_ASSERT */
+
+void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
+{
+
+  if(tim_baseHandle->Instance==TIM1)
+  {
+  /* USER CODE BEGIN TIM1_MspDeInit 0 */
+
+  /* USER CODE END TIM1_MspDeInit 0 */
+    /* Peripheral clock disable */
+    __HAL_RCC_TIM1_CLK_DISABLE();
+  /* USER CODE BEGIN TIM1_MspDeInit 1 */
+
+  /* USER CODE END TIM1_MspDeInit 1 */
+  }
+} 
+
+
+/*..........................FreeRTOS Task.............................*/
+
+void Temperature_measurement(void *argument)
+{
+  float temperature;
+  for(;;)
+  {
+    DS18B20_ReadAll();
+    DS18B20_StartAll();
+
+    for(int i = 0; i < DS18B20_Quantity(); i++)
+    {
+      if(DS18B20_GetTemperature(i, &temperature))
+        printf("Temperature is : %.2f", temperature);
+    }
+    osDelay(1000/portTICK_PERIOD_MS);
+  
+  }
+}
+
+void StartDefaultTask(void *argument)
+{
+  int i=0;
+  // HAL_UART_Receive_IT(&huart1, buffer, 6);
+  for(;;)
+  {
+    ModbusDATA[0]=i++;
+    ModbusDATA[1]=i++;
+    ModbusDATA[2]=i++;
+    ModbusDATA[5]=6;
+    printf("Hello World!!!\n");
+    vTaskDelay(1000/portTICK_PERIOD_MS);
+    if(i>10) i=0;
+  }
+}
+
+
+
+
+/* USER CODE END 0 */
+
+
+int main(void)
+{
+  /* USER CODE BEGIN 1 */
+
+  /* USER CODE END 1 */
+
+  /* MCU Configuration--------------------------------------------------------*/
+
+  /* Reset of all peripherals, Initializes the Flash interface and the Systick. */
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+
+  /* Configure the system clock */
+  SystemClock_Config();
+
+  /* Initialize all configured peripherals */
+  MX_GPIO_Init();
+  MX_USART1_UART_Init();
+  MX_USART3_UART_Init();
+
+  ModbusH.uModbusType = MB_SLAVE;
+  ModbusH.port =  &huart3;
+  ModbusH.u8id = 3; //Modbus slave ID
+  ModbusH.u16timeOut = 1000;
+  ModbusH.EN_Port = RS485_GPIO_Port;
+  ModbusH.EN_Pin = RS485_Pin;
+  ModbusH.u16regs = ModbusDATA;
+  ModbusH.u16regsize= sizeof(ModbusDATA)/sizeof(ModbusDATA[0]);
+  ModbusH.xTypeHW = USART_HW;
+  
+  //Initialize Modbus RTU
+  ModbusInit(&ModbusH);
+  ModbusStart(&ModbusH);
+
+  //Init DS18b20
+  DS18B20_Init(DS18B20_Resolution_12bits);
+
+  /* Init scheduler RTOS*/
+  osKernelInitialize();
+
+  defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
+  Temperature_measurement_Handle = osThreadNew(Temperature_measurement, NULL, &Temperature_measurement_attributes);
+
+
+  /* Start scheduler */
+  // osKernelStart();
+
+  while(1)
+  {
+    HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
+    OneWire_Delay(100);
+  }
+
+}
+
 

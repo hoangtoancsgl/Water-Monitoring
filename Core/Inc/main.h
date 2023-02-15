@@ -62,6 +62,9 @@ void Error_Handler(void);
 /* USER CODE BEGIN Private defines */
 #define RS485_Pin GPIO_PIN_2
 #define RS485_GPIO_Port GPIOB
+
+#define DS18B20_GPIO_Port GPIOB
+#define DS18B20_Pin GPIO_PIN_3
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus
