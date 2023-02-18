@@ -8,15 +8,16 @@
 #include "Modbus.h"
 #include "semphr.h"
 #include "ds18b20.h"
+#include "adc_sensor.h"
 
 /* USER CODE END Includes */
+
 
 /* Private variables ---------------------------------------------------------*/
 UART_HandleTypeDef huart1;
 UART_HandleTypeDef huart3;
 
 ADC_HandleTypeDef hadc1;
-DMA_HandleTypeDef hdma_adc1;
 
 TIM_HandleTypeDef htim1;
 
@@ -28,13 +29,15 @@ const osThreadAttr_t defaultTask_attributes = {
   .stack_size = 128 * 4
 };
 
-/* Definitions for Temperature_measurement_task */
-osThreadId_t Temperature_measurement_Handle;
-const osThreadAttr_t Temperature_measurement_attributes = {
-  .name = "Temperature_measurement",
+/* Definitions for Sensor_measurement_task */
+osThreadId_t Sensor_measurement_Handle;
+const osThreadAttr_t Sensor_measurement_attributes = {
+  .name = "Sensor_measurement",
   .priority = (osPriority_t) osPriorityLow,
   .stack_size = 128 * 4
 };
+
+
 
 /* USER CODE BEGIN PV */
 modbusHandler_t ModbusH;
@@ -44,6 +47,8 @@ uint16_t ModbusDATA[8];
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+#define Voltage_686  1000
+#define  Voltage_401  2000
 
 //For debug
 #ifdef __GNUC__
@@ -166,6 +171,7 @@ static void MX_USART3_UART_Init(void)
 
 }
 
+
 static void MX_GPIO_Init(void)
 {
   GPIO_InitTypeDef GPIO_InitStruct = {0};
@@ -197,20 +203,10 @@ static void MX_GPIO_Init(void)
 
 }
 
+
 static void MX_ADC1_Init(void)
 {
 
-  /* USER CODE BEGIN ADC1_Init 0 */
-
-  /* USER CODE END ADC1_Init 0 */
-
-  ADC_ChannelConfTypeDef sConfig = {0};
-
-  /* USER CODE BEGIN ADC1_Init 1 */
-
-  /* USER CODE END ADC1_Init 1 */
-  /** Common config
-  */
   hadc1.Instance = ADC1;
   hadc1.Init.ScanConvMode = ADC_SCAN_ENABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
@@ -222,41 +218,9 @@ static void MX_ADC1_Init(void)
   {
     Error_Handler();
   }
-  /** Configure Regular Channel
-  */
-  sConfig.Channel = ADC_CHANNEL_4;
-  sConfig.Rank = ADC_REGULAR_RANK_1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_1CYCLE_5;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /** Configure Regular Channel
-  */
-  sConfig.Channel = ADC_CHANNEL_5;
-  sConfig.Rank = ADC_REGULAR_RANK_2;
-  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-  {
-    Error_Handler();
-  }
-  /* USER CODE BEGIN ADC1_Init 2 */
-
-  /* USER CODE END ADC1_Init 2 */
 
 }
 
-static void MX_DMA_Init(void)
-{
-
-  /* DMA controller clock enable */
-  __HAL_RCC_DMA1_CLK_ENABLE();
-
-  /* DMA interrupt init */
-  /* DMA1_Channel1_IRQn interrupt configuration */
-  HAL_NVIC_SetPriority(DMA1_Channel1_IRQn, 5, 0);
-  HAL_NVIC_EnableIRQ(DMA1_Channel1_IRQn);
-
-}
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
 {
@@ -337,26 +301,30 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
 
 /*..........................FreeRTOS Task.............................*/
 
-void Temperature_measurement(void *argument)
+void Sensor_measurement(void *argument)
 {
   float temperature;
+  int PH_value;
   for(;;)
   {
+    /*Temperture read*/
     DS18B20_ReadAll();
     DS18B20_StartAll();
 
-    for(int i = 0; i < DS18B20_Quantity(); i++)
+    if(DS18B20_GetTemperature(0, &temperature))
     {
-      if(DS18B20_GetTemperature(i, &temperature))
-      {
-        xSemaphoreTake(ModbusH.ModBusSphrHandle , 100);
-        ModbusDATA[1] = (int)temperature;
-        xSemaphoreGive(ModbusH.ModBusSphrHandle);
-        // printf("Temperature is : %.2f\n", temperature);
-      }
-        
-      else printf("Error!\n");
+      xSemaphoreTake(ModbusH.ModBusSphrHandle , 100);
+      if(temperature <50) ModbusDATA[1] = (int)(temperature*10);
+      xSemaphoreGive(ModbusH.ModBusSphrHandle);
     }
+        
+    /*PH read*/
+    PH_value = read_ph_sensor(adc_read_ph_sensor_voltage(), Voltage_686, Voltage_401);
+    
+    xSemaphoreTake(ModbusH.ModBusSphrHandle , 100);
+    if((PH_value > 0) && (PH_value<=140)) ModbusDATA[2] = PH_value;
+    xSemaphoreGive(ModbusH.ModBusSphrHandle);
+    
     osDelay(1000/portTICK_PERIOD_MS);
   
   }
@@ -364,20 +332,8 @@ void Temperature_measurement(void *argument)
 
 void StartDefaultTask(void *argument)
 {
-  uint16_t data[2];
   for(;;)
-  {
-    HAL_ADC_Start(&hadc1);
-    HAL_ADC_PollForConversion(&hadc1, 1000);
-    data[0] = HAL_ADC_GetValue(&hadc1);
-    HAL_ADC_Stop(&hadc1);
-
-    printf("ADC value: %d\n", data[0]);
-
-    // HAL_ADC_Start_DMA(&hadc1, (uint32_t*)data, 2);
-    // osDelay(100/portTICK_PERIOD_MS);
-    // printf("ADC value: %d\n", data[0]);
-
+  {  
     osDelay(1000/portTICK_PERIOD_MS);
   }
 }
@@ -410,7 +366,6 @@ int main(void)
   MX_GPIO_Init();
   MX_USART1_UART_Init();
   MX_USART3_UART_Init();
-  // MX_DMA_Init();
   MX_ADC1_Init();
 
 
@@ -438,16 +393,9 @@ int main(void)
   osKernelInitialize();
 
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
-  Temperature_measurement_Handle = osThreadNew(Temperature_measurement, NULL, &Temperature_measurement_attributes);
+  Sensor_measurement_Handle = osThreadNew(Sensor_measurement, NULL, &Sensor_measurement_attributes);
 
 
   /* Start scheduler */
   osKernelStart();
-
-  // while(1)
-  // {
-  //   HAL_GPIO_TogglePin(LED_GPIO_Port, LED_Pin);
-  //   OneWire_Delay(5);
-  // }
-
 }

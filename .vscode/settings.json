@@ -6,6 +6,7 @@
         "main.h": "c",
         "stm32f1xx_hal.h": "c",
         "onewire.h": "c",
-        "ds18b20.h": "c"
+        "ds18b20.h": "c",
+        "adc_sensor.h": "c"
     }
 }
