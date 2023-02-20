@@ -57,14 +57,19 @@ void Error_Handler(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define LED_Pin GPIO_PIN_13
-#define LED_GPIO_Port GPIOC
 /* USER CODE BEGIN Private defines */
 #define RS485_Pin GPIO_PIN_2
 #define RS485_GPIO_Port GPIOB
 
 #define DS18B20_GPIO_Port GPIOB
 #define DS18B20_Pin GPIO_PIN_1
+
+#define Pump_Pin GPIO_PIN_13
+#define Pump_GPIO_Port GPIOB
+
+#define Valve_Pin GPIO_PIN_12
+#define Valve_GPIO_Port GPIOB
+
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

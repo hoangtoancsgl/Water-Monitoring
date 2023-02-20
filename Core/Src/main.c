@@ -183,16 +183,10 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(LED_GPIO_Port, LED_Pin, GPIO_PIN_RESET);
-
   HAL_GPIO_WritePin(RS485_GPIO_Port, RS485_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin : LED_Pin */
-  GPIO_InitStruct.Pin = LED_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(LED_GPIO_Port, &GPIO_InitStruct);
+  
+  HAL_GPIO_WritePin(Pump_GPIO_Port, Pump_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(Valve_GPIO_Port, Valve_Pin, GPIO_PIN_SET);
 
   /*Configure GPIO pin : RS485_Pin */
   GPIO_InitStruct.Pin = RS485_Pin;
@@ -200,6 +194,20 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(RS485_GPIO_Port, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : Pump_Pin */
+  GPIO_InitStruct.Pin = Pump_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(Pump_GPIO_Port, &GPIO_InitStruct);
+  
+  /*Configure GPIO pin : Valve_Pin */
+  GPIO_InitStruct.Pin = Valve_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(Valve_GPIO_Port, &GPIO_InitStruct);
 
 }
 
@@ -305,6 +313,7 @@ void Sensor_measurement(void *argument)
 {
   float temperature;
   int PH_value;
+  int ORP_value;
   for(;;)
   {
     /*Temperture read*/
@@ -319,12 +328,21 @@ void Sensor_measurement(void *argument)
     }
         
     /*PH read*/
-    PH_value = read_ph_sensor(adc_read_ph_sensor_voltage(), Voltage_686, Voltage_401);
+    PH_value = read_ph_sensor(adc_read_sensor_voltage(PH_sensor), Voltage_686, Voltage_401);
     
     xSemaphoreTake(ModbusH.ModBusSphrHandle , 100);
     if((PH_value > 0) && (PH_value<=140)) ModbusDATA[2] = PH_value;
     xSemaphoreGive(ModbusH.ModBusSphrHandle);
+
+
+    /*ORP read*/
+    ORP_value = read_orp_sensor(adc_read_sensor_voltage(ORP_sensor));
     
+    xSemaphoreTake(ModbusH.ModBusSphrHandle , 100);
+    if((ORP_value > 0) && (PH_value<=300)) ModbusDATA[3] = ORP_value;
+    xSemaphoreGive(ModbusH.ModBusSphrHandle);
+    
+
     osDelay(1000/portTICK_PERIOD_MS);
   
   }
@@ -334,6 +352,9 @@ void StartDefaultTask(void *argument)
 {
   for(;;)
   {  
+    HAL_GPIO_TogglePin(Pump_GPIO_Port, Pump_Pin);
+    osDelay(1000/portTICK_PERIOD_MS);
+    HAL_GPIO_TogglePin(Pump_GPIO_Port, Valve_Pin);
     osDelay(1000/portTICK_PERIOD_MS);
   }
 }

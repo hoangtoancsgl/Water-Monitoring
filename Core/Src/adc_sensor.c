@@ -1,6 +1,5 @@
 #include "main.h"
 #include "adc_sensor.h"
-enum sensor_type {PH_sensor = 1, ORP_sensor = 2};
 
 #define NO_OF_SAMPLES 32 
 
@@ -70,26 +69,25 @@ uint16_t adc1_get_raw(char sensor)
         HAL_ADC_Stop(&hadc1);
         return tem_val;
     }
-
 }
 
-uint16_t adc_read_ph_sensor_voltage()
+uint16_t adc_read_sensor_voltage(char sensor)
 {
-    uint32_t PH_sensor_value = 0;
+    uint32_t sensor_voltage = 0;
     //Multisampling
     for (int j = 0; j < NO_OF_SAMPLES; j++) 
     {
         for (int i = 0; i < NO_OF_SAMPLES; i++) 
         {
-            adc_buff[i]= adc1_get_raw(PH_sensor);
+            adc_buff[i]= adc1_get_raw(sensor);
         }
         vTaskDelay(1);
         adc_buff1[j] = getMedianNum(adc_buff, NO_OF_SAMPLES);
     }
         
-    PH_sensor_value = getMedianNum(adc_buff1, NO_OF_SAMPLES);
-    // Convert PH_sensor_value to voltage in V
-    return adc_cal_raw_to_voltage(PH_sensor_value);
+    sensor_voltage = getMedianNum(adc_buff1, NO_OF_SAMPLES);
+    // Convert ADC value to voltage in mV
+    return adc_cal_raw_to_voltage(sensor_voltage);
 }
 
 int read_ph_sensor(uint16_t ph_voltage, uint16_t Voltage_686, uint16_t Voltage_401)
@@ -98,4 +96,9 @@ int read_ph_sensor(uint16_t ph_voltage, uint16_t Voltage_686, uint16_t Voltage_4
     float intercept =  6.86 - slope*(Voltage_686-1500.0)/3.0;
 
     return 10*(slope*(ph_voltage-1500.0)/3.0+intercept);  //y = k*x + b
+}
+
+int read_orp_sensor(uint16_t orp_voltage)
+{
+    return orp_voltage/10;
 }
