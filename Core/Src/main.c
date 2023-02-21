@@ -306,6 +306,31 @@ void HAL_TIM_Base_MspDeInit(TIM_HandleTypeDef* tim_baseHandle)
   }
 } 
 
+stm_err_t get_sensors_value(float* temperature, int* PH_value, int* ORP_value)
+{
+  /*Temperture read*/
+  DS18B20_ReadAll();
+  DS18B20_StartAll();
+  if(!DS18B20_GetTemperature(0, temperature)) return STM_FAIL;
+  
+  /*PH read*/
+  *PH_value = read_ph_sensor(adc_read_sensor_voltage(PH_sensor), Voltage_686, Voltage_401);
+  
+  /*ORP read*/
+  *ORP_value = read_orp_sensor(adc_read_sensor_voltage(ORP_sensor));
+
+  return STM_OK;
+}
+
+void write_data_to_modbus_register(float temperature, int PH_value, int ORP_value)
+{
+  xSemaphoreTake(ModbusH.ModBusSphrHandle , 100);
+    if(temperature <50) ModbusDATA[2] = (int)(temperature*10);
+    if((PH_value > 0) && (PH_value<=140)) ModbusDATA[3] = PH_value;
+    if((ORP_value > 0) && (PH_value<=300)) ModbusDATA[4] = ORP_value;
+  xSemaphoreGive(ModbusH.ModBusSphrHandle);
+}
+
 
 /*..........................FreeRTOS Task.............................*/
 
@@ -314,37 +339,43 @@ void Sensor_measurement(void *argument)
   float temperature;
   int PH_value;
   int ORP_value;
+
+  uint32_t interval;
   for(;;)
   {
-    /*Temperture read*/
-    DS18B20_ReadAll();
-    DS18B20_StartAll();
+    /*Open valve and turn on pump to make the container full of water*/
+    HAL_GPIO_WritePin(Valve_GPIO_Port, Valve_Pin, 1);
+    HAL_GPIO_WritePin(Pump_GPIO_Port, Pump_Pin, 1);
 
-    if(DS18B20_GetTemperature(0, &temperature))
+    /*Delay 2 minutes*/
+    osDelay(2*60*1000);
+    
+    /*Close valve and turn off pump*/
+    HAL_GPIO_WritePin(Valve_GPIO_Port, Valve_Pin, 0);
+    HAL_GPIO_WritePin(Pump_GPIO_Port, Pump_Pin, 0);
+
+    while(get_sensors_value(&temperature, &PH_value, &ORP_value) == STM_FAIL)
     {
-      xSemaphoreTake(ModbusH.ModBusSphrHandle , 100);
-      if(temperature <50) ModbusDATA[1] = (int)(temperature*10);
-      xSemaphoreGive(ModbusH.ModBusSphrHandle);
+      printf("Get sensors value failed, retry...\n");
+      osDelay(500);
     }
-        
-    /*PH read*/
-    PH_value = read_ph_sensor(adc_read_sensor_voltage(PH_sensor), Voltage_686, Voltage_401);
-    
+
+    write_data_to_modbus_register(temperature, PH_value, ORP_value);
+
+    /*Open valve to release water and make the container empty*/
+    HAL_GPIO_WritePin(Valve_GPIO_Port, Valve_Pin, 1);
+
+    /*Delay 2 minutes*/
+    osDelay(3*60*1000);
+
+
+    /*Delay and restart after the interval*/
     xSemaphoreTake(ModbusH.ModBusSphrHandle , 100);
-    if((PH_value > 0) && (PH_value<=140)) ModbusDATA[2] = PH_value;
-    xSemaphoreGive(ModbusH.ModBusSphrHandle);
-
-
-    /*ORP read*/
-    ORP_value = read_orp_sensor(adc_read_sensor_voltage(ORP_sensor));
-    
-    xSemaphoreTake(ModbusH.ModBusSphrHandle , 100);
-    if((ORP_value > 0) && (PH_value<=300)) ModbusDATA[3] = ORP_value;
+    interval = ModbusDATA[1]*60*1000;
     xSemaphoreGive(ModbusH.ModBusSphrHandle);
     
+    osDelay(interval);
 
-    osDelay(1000/portTICK_PERIOD_MS);
-  
   }
 }
 
@@ -352,9 +383,6 @@ void StartDefaultTask(void *argument)
 {
   for(;;)
   {  
-    HAL_GPIO_TogglePin(Pump_GPIO_Port, Pump_Pin);
-    osDelay(1000/portTICK_PERIOD_MS);
-    HAL_GPIO_TogglePin(Pump_GPIO_Port, Valve_Pin);
     osDelay(1000/portTICK_PERIOD_MS);
   }
 }

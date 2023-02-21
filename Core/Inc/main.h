@@ -46,7 +46,11 @@ extern "C" {
 
 /* Exported macro ------------------------------------------------------------*/
 /* USER CODE BEGIN EM */
+typedef int stm_err_t;
 
+/* Definitions for error constants. */
+#define STM_OK          0       /*!< esp_err_t value indicating success (no error) */
+#define STM_FAIL        -1      /*!< Generic esp_err_t code indicating failure */
 /* USER CODE END EM */
 
 /* Exported functions prototypes ---------------------------------------------*/
