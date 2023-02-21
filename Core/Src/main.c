@@ -37,6 +37,8 @@ const osThreadAttr_t Sensor_measurement_attributes = {
   .stack_size = 128 * 4
 };
 
+/*Definition mutex for control read sensor sequence*/
+SemaphoreHandle_t Sensor_Semaphore = NULL;
 
 
 /* USER CODE BEGIN PV */
@@ -185,8 +187,8 @@ static void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(RS485_GPIO_Port, RS485_Pin, GPIO_PIN_RESET);
   
-  HAL_GPIO_WritePin(Pump_GPIO_Port, Pump_Pin, GPIO_PIN_SET);
-  HAL_GPIO_WritePin(Valve_GPIO_Port, Valve_Pin, GPIO_PIN_SET);
+  HAL_GPIO_WritePin(Pump_GPIO_Port, Pump_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(Valve_GPIO_Port, Valve_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : RS485_Pin */
   GPIO_InitStruct.Pin = RS485_Pin;
@@ -336,6 +338,8 @@ void write_data_to_modbus_register(float temperature, int PH_value, int ORP_valu
 
 void Sensor_measurement(void *argument)
 {
+  osDelay(100);
+  
   float temperature;
   int PH_value;
   int ORP_value;
@@ -343,12 +347,16 @@ void Sensor_measurement(void *argument)
   uint32_t interval;
   for(;;)
   {
+    osDelay(100);
+    xSemaphoreTake(Sensor_Semaphore , portMAX_DELAY);
+    xSemaphoreGive(Sensor_Semaphore);
+    
     /*Open valve and turn on pump to make the container full of water*/
     HAL_GPIO_WritePin(Valve_GPIO_Port, Valve_Pin, 1);
     HAL_GPIO_WritePin(Pump_GPIO_Port, Pump_Pin, 1);
 
-    /*Delay 2 minutes*/
-    osDelay(2*60*1000);
+    /*Delay 1 minutes*/
+    osDelay(1*60*1000);
     
     /*Close valve and turn off pump*/
     HAL_GPIO_WritePin(Valve_GPIO_Port, Valve_Pin, 0);
@@ -365,8 +373,11 @@ void Sensor_measurement(void *argument)
     /*Open valve to release water and make the container empty*/
     HAL_GPIO_WritePin(Valve_GPIO_Port, Valve_Pin, 1);
 
-    /*Delay 2 minutes*/
-    osDelay(3*60*1000);
+    /*Delay 1 minutes*/
+    osDelay(1*60*1000);
+    
+    /*Close valve*/
+    HAL_GPIO_WritePin(Valve_GPIO_Port, Valve_Pin, 0);
 
 
     /*Delay and restart after the interval*/
@@ -382,8 +393,16 @@ void Sensor_measurement(void *argument)
 void StartDefaultTask(void *argument)
 {
   for(;;)
-  {  
-    osDelay(1000/portTICK_PERIOD_MS);
+  { 
+    if(!ModbusDATA[0])
+    {
+      xSemaphoreTake(Sensor_Semaphore , portMAX_DELAY);
+    
+      while(!ModbusDATA[0]) osDelay(1);
+      xSemaphoreGive(Sensor_Semaphore);
+    }
+    
+    osDelay(1);
   }
 }
 
@@ -441,8 +460,17 @@ int main(void)
   /* Init scheduler RTOS*/
   osKernelInitialize();
 
+  /*Mutex for control reading sensor sequence*/
+  Sensor_Semaphore = xSemaphoreCreateMutex();
+
+  /*Time interval default*/
+  ModbusDATA[1] = 1;
+
+
   defaultTaskHandle = osThreadNew(StartDefaultTask, NULL, &defaultTask_attributes);
   Sensor_measurement_Handle = osThreadNew(Sensor_measurement, NULL, &Sensor_measurement_attributes);
+
+  
 
 
   /* Start scheduler */
